@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.BrowniePointsApp" parent="Theme.MaterialComponents.DayNight">
+        <!-- Customize your light theme here. -->
+        <item name="colorPrimary">@color/brownie_gold</item>
+        <item name="colorPrimaryVariant">@color/brownie_gold_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/chocolate_brown</item>
+        <item name="colorSecondaryVariant">@color/chocolate_brown</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="android:colorBackground">@color/warm_cream</item>
+        <item name="colorOnBackground">@color/chocolate_brown</item>
+        <item name="colorSurface">@color/warm_cream</item>
+        <item name="colorOnSurface">@color/chocolate_brown</item>
+    </style>
+</resources>

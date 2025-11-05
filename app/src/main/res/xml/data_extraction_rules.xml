@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Exclude Firebase cache and sensitive data -->
+        <exclude domain="database" path="google_app_measurement.db" />
+        <exclude domain="database" path="google_app_measurement_local.db" />
+        <exclude domain="sharedpref" path="FirebaseAppHeartBeat.xml" />
+        <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- Allow device transfer but exclude sensitive Firebase data -->
+        <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store" />
+    </device-transfer>
+</data-extraction-rules>

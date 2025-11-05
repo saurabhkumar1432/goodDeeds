@@ -1,0 +1,193 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for security validation
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidUser(userData) {
+      return userData.keys().hasAll(['uid', 'displayName', 'email', 'matchingCode']) &&
+             userData.uid is string && userData.uid.size() > 0 &&
+             userData.displayName is string && userData.displayName.size() > 0 &&
+             userData.email is string && userData.email.matches('.*@.*\\..*') &&
+             userData.matchingCode is string && userData.matchingCode.size() == 6 &&
+             (userData.totalPointsReceived is int || !userData.keys().hasAny(['totalPointsReceived'])) &&
+             (userData.connectedUserId is string || userData.connectedUserId == null);
+    }
+    
+    function isValidConnection(connectionData) {
+      return connectionData.keys().hasAll(['user1Id', 'user2Id']) &&
+             connectionData.user1Id is string && connectionData.user1Id.size() > 0 &&
+             connectionData.user2Id is string && connectionData.user2Id.size() > 0 &&
+             connectionData.user1Id != connectionData.user2Id &&
+             (connectionData.isActive is bool || !connectionData.keys().hasAny(['isActive']));
+    }
+    
+    function isValidTransaction(transactionData) {
+      return transactionData.keys().hasAll(['senderId', 'receiverId', 'points', 'connectionId', 'type']) &&
+             transactionData.senderId is string && transactionData.senderId.size() > 0 &&
+             transactionData.receiverId is string && transactionData.receiverId.size() > 0 &&
+             transactionData.senderId != transactionData.receiverId &&
+             transactionData.points is int &&
+             ((transactionData.type == 'GIVE' && transactionData.points >= 1 && transactionData.points <= 10) ||
+              (transactionData.type == 'DEDUCT' && transactionData.points >= -10 && transactionData.points <= -1)) &&
+             transactionData.connectionId is string && transactionData.connectionId.size() > 0 &&
+             (transactionData.message == null || 
+              (transactionData.message is string && transactionData.message.size() <= 200));
+    }
+    
+    function isValidTimeout(timeoutData) {
+      return timeoutData.keys().hasAll(['userId', 'connectionId', 'duration', 'createdDate']) &&
+             timeoutData.userId is string && timeoutData.userId.size() > 0 &&
+             timeoutData.connectionId is string && timeoutData.connectionId.size() > 0 &&
+             timeoutData.duration is int && timeoutData.duration > 0 &&
+             timeoutData.createdDate is string && timeoutData.createdDate.matches('\\d{4}-\\d{2}-\\d{2}') &&
+             (timeoutData.isActive is bool || !timeoutData.keys().hasAny(['isActive']));
+    }
+    
+
+    
+    function getConnectionId(user1Id, user2Id) {
+      return user1Id < user2Id ? user1Id + '_' + user2Id : user2Id + '_' + user1Id;
+    }
+    
+    function isPartOfConnection(connectionData, userId) {
+      return connectionData.user1Id == userId || connectionData.user2Id == userId;
+    }
+    
+    // Users collection - users can only access their own data and connected partner's basic info
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isOwner(userId);
+      
+      // Allow authenticated users to query by matchingCode (for connection establishment)
+      // This is needed for ConnectionRepository.validateMatchingCode()
+      allow read: if isAuthenticated();
+      
+      // Users can create their own profile during sign-up
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) &&
+                       request.resource.data.uid == userId;
+      
+      // Users can update their own profile with restrictions
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) &&
+                       request.resource.data.uid == userId &&
+                       // Prevent changing uid, email, and matchingCode after creation
+                       request.resource.data.uid == resource.data.uid &&
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.matchingCode == resource.data.matchingCode;
+      
+      // Allow updates from connected partner for connection establishment
+      // This is needed when ConnectionRepository updates both users' connectedUserId
+      allow update: if isAuthenticated() && 
+                       request.resource.data.keys().hasAny(['connectedUserId']) &&
+                       // Only allow updating connectedUserId field
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['connectedUserId']);
+      
+      // Allow updates from connected partner for transaction points
+      // This is needed when TransactionRepository updates receiver's totalPointsReceived
+      allow update: if isAuthenticated() && 
+                       resource.data.connectedUserId == request.auth.uid &&
+                       request.resource.data.keys().hasAny(['totalPointsReceived']) &&
+                       // Only allow updating totalPointsReceived field
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalPointsReceived']);
+      
+      // Users cannot delete their profiles (data retention for relationship history)
+      allow delete: if false;
+    }
+    
+    // Connections collection - only connected users can access their connection
+    match /connections/{connectionId} {
+      // Users can read connections they are part of
+      allow read: if isAuthenticated() && isPartOfConnection(resource.data, request.auth.uid);
+      
+      // Users can create connections where they are one of the participants
+      allow create: if isAuthenticated() && 
+                      isValidConnection(request.resource.data) &&
+                      isPartOfConnection(request.resource.data, request.auth.uid);
+      
+      // Users can update connections they are part of (for status changes)
+      allow update: if isAuthenticated() && 
+                      isPartOfConnection(resource.data, request.auth.uid) &&
+                      isValidConnection(request.resource.data) &&
+                      // Prevent changing user IDs after creation
+                      request.resource.data.user1Id == resource.data.user1Id &&
+                      request.resource.data.user2Id == resource.data.user2Id;
+      
+      // Connections cannot be deleted (data retention for relationship history)
+      allow delete: if false;
+    }
+    
+    // Transactions collection - users can only access transactions they sent or received
+    match /transactions/{transactionId} {
+      // Users can read transactions where they are sender or receiver
+      allow read: if isAuthenticated() && 
+                     (resource.data.senderId == request.auth.uid || 
+                      resource.data.receiverId == request.auth.uid);
+      
+      // Users can only create transactions where they are the sender
+      allow create: if isAuthenticated() && 
+                      isValidTransaction(request.resource.data) &&
+                      request.resource.data.senderId == request.auth.uid;
+      
+      // Transactions cannot be updated or deleted (immutable for audit trail)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Timeouts collection - users can access timeouts for their connections
+    match /timeouts/{timeoutId} {
+      // Users can read timeouts they created or that affect their connection
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid ||
+                      isConnectedToTimeout(resource.data, request.auth.uid));
+      
+      // Users can create timeouts for themselves
+      allow create: if isAuthenticated() && 
+                      isValidTimeout(request.resource.data) &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Users can update timeouts they created (for expiration status)
+      allow update: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid &&
+                      isValidTimeout(request.resource.data) &&
+                      // Prevent changing core timeout data after creation
+                      request.resource.data.userId == resource.data.userId &&
+                      request.resource.data.connectionId == resource.data.connectionId &&
+                      request.resource.data.duration == resource.data.duration &&
+                      request.resource.data.createdDate == resource.data.createdDate;
+      
+      // Timeouts cannot be deleted (data retention for relationship history)
+      allow delete: if false;
+    }
+    
+    // Helper function to check if user is connected to timeout creator
+    function isConnectedToTimeout(timeoutData, userId) {
+      return exists(/databases/$(database)/documents/connections/$(timeoutData.connectionId)) &&
+             get(/databases/$(database)/documents/connections/$(timeoutData.connectionId)).data.user1Id == userId ||
+             get(/databases/$(database)/documents/connections/$(timeoutData.connectionId)).data.user2Id == userId;
+    }
+    
+    // Notifications collection - users can only access their own notifications
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System can create notifications (handled by Cloud Functions or admin SDK)
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their notifications (mark as read, etc.)
+      allow update: if isAuthenticated() && 
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

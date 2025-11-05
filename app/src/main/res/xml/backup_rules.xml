@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude Firebase cache and sensitive data -->
+    <exclude domain="database" path="google_app_measurement.db" />
+    <exclude domain="database" path="google_app_measurement_local.db" />
+    <exclude domain="sharedpref" path="FirebaseAppHeartBeat.xml" />
+    <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store" />
+</full-backup-content>
