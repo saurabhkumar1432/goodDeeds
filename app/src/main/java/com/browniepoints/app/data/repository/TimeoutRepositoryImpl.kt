@@ -163,6 +163,14 @@ class TimeoutRepositoryImpl @Inject constructor(
                             trySend(null) // Send null instead of crashing
                             return@addSnapshotListener
                         }
+                        // Check if it's a permission error (user logged out)
+                        if (error.message?.contains("PERMISSION_DENIED") == true ||
+                            error.message?.contains("Missing or insufficient permissions") == true) {
+                            Log.w(TAG, "Permission denied, user likely logged out. Closing observer.")
+                            trySend(null) // Send null and close gracefully
+                            close()
+                            return@addSnapshotListener
+                        }
                         close(error)
                         return@addSnapshotListener
                     }
@@ -234,6 +242,12 @@ class TimeoutRepositoryImpl @Inject constructor(
             Log.d(TAG, "Retrieved ${timeouts.size} timeouts for user: $userId")
             Result.success(timeouts)
         } catch (e: Exception) {
+            // Gracefully handle index building errors
+            if (e.message?.contains("index is currently building") == true ||
+                e.message?.contains("requires an index") == true) {
+                Log.w(TAG, "Index is still building for timeout history, returning empty list", e)
+                return Result.success(emptyList()) // Return empty list while index builds
+            }
             Log.e(TAG, "Error getting timeout history", e)
             Result.failure(e)
         }
@@ -274,6 +288,14 @@ class TimeoutRepositoryImpl @Inject constructor(
                             error.message?.contains("requires an index") == true) {
                             Log.w(TAG, "Index is still building for timeout status, will retry automatically")
                             trySend(false) // Send false instead of crashing
+                            return@addSnapshotListener
+                        }
+                        // Check if it's a permission error (user logged out)
+                        if (error.message?.contains("PERMISSION_DENIED") == true ||
+                            error.message?.contains("Missing or insufficient permissions") == true) {
+                            Log.w(TAG, "Permission denied for timeout status, user likely logged out. Closing observer.")
+                            trySend(false) // Send false and close gracefully
+                            close()
                             return@addSnapshotListener
                         }
                         close(error)

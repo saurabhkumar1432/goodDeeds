@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
 @HiltViewModel
 class TimeoutViewModel @Inject constructor(
     private val timeoutUseCase: TimeoutUseCase,
@@ -51,6 +52,8 @@ class TimeoutViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { connectionId ->
             timeoutManager.observeActiveTimeoutWithMonitoring(connectionId)
+                .distinctUntilChanged() // Prevent flickering from rapid updates
+                .debounce(100) // Wait 100ms before emitting
         }
         .stateIn(
             scope = viewModelScope,
@@ -63,6 +66,8 @@ class TimeoutViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { connectionId ->
             timeoutManager.observeTimeoutStatus(connectionId)
+                .distinctUntilChanged() // Prevent flickering from rapid updates
+                .debounce(100) // Wait 100ms before emitting to avoid rapid changes
         }
         .stateIn(
             scope = viewModelScope,
@@ -91,6 +96,8 @@ class TimeoutViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { connectionId ->
             timeoutManager.observeTransactionsDisabled(connectionId)
+                .distinctUntilChanged() // Prevent flickering from rapid updates
+                .debounce(100) // Wait 100ms before emitting
         }
         .stateIn(
             scope = viewModelScope,
@@ -319,17 +326,29 @@ class TimeoutViewModel @Inject constructor(
     /**
      * Gets timeout history for a user
      */
+    /**
+     * Gets timeout history for a user with caching to prevent repeated queries
+     */
+    private val timeoutHistoryCache = mutableMapOf<String, Flow<UiState<List<Timeout>>>>()
+    
     fun getTimeoutHistory(userId: String): Flow<UiState<List<Timeout>>> {
-        return flow {
-            emit(UiState.Loading)
-            try {
-                val history = timeoutUseCase.getTimeoutHistory(userId).getOrThrow()
-                emit(UiState.Success(history))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error getting timeout history", e)
-                val appError = if (e is AppError) e else AppError.UnknownError(e.message ?: "Unknown error", e)
-                emit(UiState.Error(appError))
-            }
+        // Return cached flow if exists, otherwise create and cache it
+        return timeoutHistoryCache.getOrPut(userId) {
+            flow {
+                emit(UiState.Loading)
+                try {
+                    val history = timeoutUseCase.getTimeoutHistory(userId).getOrThrow()
+                    emit(UiState.Success(history))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error getting timeout history", e)
+                    val appError = if (e is AppError) e else AppError.UnknownError(e.message ?: "Unknown error", e)
+                    emit(UiState.Error(appError))
+                }
+            }.shareIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                replay = 1
+            )
         }
     }
 
