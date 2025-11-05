@@ -64,7 +64,7 @@ class TransactionViewModel @Inject constructor(
 
             userRepository.getUser(userId)
                 .onSuccess { user ->
-                    if (user != null && user.isConnected()) {
+                    if (user != null && user.connected && !user.connectedUserId.isNullOrBlank()) {
                         // Load connected partner information
                         userRepository.getUser(user.connectedUserId!!)
                             .onSuccess { partner ->
@@ -85,7 +85,7 @@ class TransactionViewModel @Inject constructor(
                         _givePointsState.value = _givePointsState.value.copy(
                             currentUser = user,
                             isLoading = false,
-                            error = if (user?.isConnected() != true) "No connected partner found" else null
+                            error = if (user?.connected != true || user.connectedUserId.isNullOrBlank()) "No connected partner found" else null
                         )
                     }
                 }
@@ -105,9 +105,43 @@ class TransactionViewModel @Inject constructor(
         viewModelScope.launch {
             userRepository.observeUser(userId).collect { user ->
                 if (user != null) {
+                    val previousConnectedUserId = _givePointsState.value.currentUser?.connectedUserId
+                    val newConnectedUserId = user.connectedUserId
+                    
                     _givePointsState.value = _givePointsState.value.copy(
                         currentUser = user
                     )
+                    
+                    // If connectedUserId changed (new connection or disconnection), reload partner
+                    if (previousConnectedUserId != newConnectedUserId) {
+                        android.util.Log.d("TransactionViewModel", "Connected user ID changed from $previousConnectedUserId to $newConnectedUserId")
+                        
+                        if (newConnectedUserId != null) {
+                            // Load the new partner
+                            android.util.Log.d("TransactionViewModel", "Loading new partner: $newConnectedUserId")
+                            userRepository.getUser(newConnectedUserId).fold(
+                                onSuccess = { partner ->
+                                    android.util.Log.d("TransactionViewModel", "Partner loaded: ${partner?.displayName}")
+                                    _givePointsState.value = _givePointsState.value.copy(
+                                        connectedPartner = partner
+                                    )
+                                },
+                                onFailure = { error ->
+                                    android.util.Log.e("TransactionViewModel", "Failed to load partner", error)
+                                    _givePointsState.value = _givePointsState.value.copy(
+                                        connectedPartner = null,
+                                        error = "Failed to load partner: ${error.message}"
+                                    )
+                                }
+                            )
+                        } else {
+                            // User disconnected, clear partner
+                            android.util.Log.d("TransactionViewModel", "User disconnected, clearing partner")
+                            _givePointsState.value = _givePointsState.value.copy(
+                                connectedPartner = null
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -262,7 +296,7 @@ class TransactionViewModel @Inject constructor(
 
             userRepository.getUser(userId)
                 .onSuccess { user ->
-                    if (user != null && user.isConnected()) {
+                    if (user != null && user.connected && !user.connectedUserId.isNullOrBlank()) {
                         // Load connected partner information
                         userRepository.getUser(user.connectedUserId!!)
                             .onSuccess { partner ->
@@ -283,7 +317,7 @@ class TransactionViewModel @Inject constructor(
                         _deductPointsState.value = _deductPointsState.value.copy(
                             currentUser = user,
                             isLoading = false,
-                            error = if (user?.isConnected() != true) "No connected partner found" else null
+                            error = if (user?.connected != true || user.connectedUserId.isNullOrBlank()) "No connected partner found" else null
                         )
                     }
                 }

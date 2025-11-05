@@ -161,8 +161,8 @@ class ConnectionViewModel @Inject constructor(
                                     isConnecting = false
                                 )
                             } else {
-                                // Create the connection directly (repository handles validation)
-                                createConnection(userId, partnerId)
+                                // Fetch partner details before confirming
+                                fetchPartnerDetailsForConfirmation(partnerId)
                             }
                         },
                         onFailure = { error ->
@@ -187,34 +187,110 @@ class ConnectionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun createConnection(userId: String, partnerId: String) {
+    private suspend fun fetchPartnerDetailsForConfirmation(partnerId: String) {
         try {
-            connectionRepository.createConnection(userId, partnerId).fold(
-                onSuccess = { connection ->
-                    _uiState.value = _uiState.value.copy(
-                        connection = connection,
-                        isConnecting = false,
-                        error = null,
-                        matchingCodeInput = "" // Clear the input after successful connection
-                    )
-                    
-                    // Reload user data to get updated connection status
-                    loadUserData()
-                    
-                    // Load partner data immediately
-                    loadPartnerData(partnerId)
+            userRepository.getUser(partnerId).fold(
+                onSuccess = { partner ->
+                    if (partner != null) {
+                        _uiState.value = _uiState.value.copy(
+                            pendingPartner = partner,
+                            isConnecting = false,
+                            error = null
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            error = "Partner not found. Please try again.",
+                            isConnecting = false
+                        )
+                    }
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(
-                        error = getErrorMessage(error),
+                        error = "Failed to fetch partner details: ${error.message}",
                         isConnecting = false
                     )
                 }
             )
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
-                error = "Failed to create connection: ${e.message}",
+                error = "Error fetching partner: ${e.message}",
                 isConnecting = false
+            )
+        }
+    }
+
+    fun confirmConnection() {
+        val userId = currentUserId
+        val partner = _uiState.value.pendingPartner
+
+        if (userId == null || partner == null) {
+            _uiState.value = _uiState.value.copy(error = "Connection information missing")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isConnecting = true)
+            createConnection(userId, partner.uid)
+        }
+    }
+
+    fun cancelConnection() {
+        _uiState.value = _uiState.value.copy(
+            pendingPartner = null,
+            matchingCodeInput = "",
+            error = null
+        )
+    }
+
+    private suspend fun createConnection(userId: String, partnerId: String) {
+        try {
+            connectionRepository.createConnection(userId, partnerId).fold(
+                onSuccess = { connection ->
+                    android.util.Log.d("ConnectionViewModel", "Connection created successfully: ${connection.id}")
+                    
+                    _uiState.value = _uiState.value.copy(
+                        connection = connection,
+                        isConnecting = false,
+                        error = null,
+                        matchingCodeInput = "", // Clear the input after successful connection
+                        pendingPartner = null // Clear pending partner after successful connection
+                    )
+                    
+                    // Small delay to ensure Firestore transaction completes and propagates
+                    kotlinx.coroutines.delay(500)
+                    
+                    // Force reload user data from Firestore to get updated connectedUserId
+                    android.util.Log.d("ConnectionViewModel", "Reloading user data after connection")
+                    userRepository.getUser(userId).fold(
+                        onSuccess = { updatedUser ->
+                            android.util.Log.d("ConnectionViewModel", "User reloaded - connectedUserId: ${updatedUser?.connectedUserId}")
+                            _uiState.value = _uiState.value.copy(
+                                currentUser = updatedUser
+                            )
+                        },
+                        onFailure = { error ->
+                            android.util.Log.e("ConnectionViewModel", "Failed to reload user after connection", error)
+                        }
+                    )
+                    
+                    // Load partner data immediately
+                    loadPartnerData(partnerId)
+                },
+                onFailure = { error ->
+                    android.util.Log.e("ConnectionViewModel", "Failed to create connection", error)
+                    _uiState.value = _uiState.value.copy(
+                        error = getErrorMessage(error),
+                        isConnecting = false,
+                        pendingPartner = null // Also clear on failure
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("ConnectionViewModel", "Exception during connection creation", e)
+            _uiState.value = _uiState.value.copy(
+                error = "Failed to create connection: ${e.message}",
+                isConnecting = false,
+                pendingPartner = null // Also clear on exception
             )
         }
     }
@@ -337,8 +413,9 @@ data class ConnectionUiState(
     val matchingCodeInput: String = "",
     val isLoading: Boolean = false,
     val isConnecting: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val pendingPartner: User? = null // Partner waiting for connection confirmation
 ) {
     val isConnected: Boolean
-        get() = connection != null && currentUser?.isConnected() == true
+        get() = connection != null && currentUser?.connected == true && !currentUser?.connectedUserId.isNullOrBlank()
 }

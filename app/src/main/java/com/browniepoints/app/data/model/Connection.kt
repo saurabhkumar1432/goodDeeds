@@ -4,6 +4,7 @@ import com.browniepoints.app.data.validation.ValidationResult
 import com.browniepoints.app.data.validation.ValidationUtils
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 
 data class Connection(
     @DocumentId
@@ -11,6 +12,7 @@ data class Connection(
     val user1Id: String = "",
     val user2Id: String = "",
     val createdAt: Timestamp = Timestamp.now(),
+    @PropertyName("active")
     val isActive: Boolean = true
 ) {
     /**

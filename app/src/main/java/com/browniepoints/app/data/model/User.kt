@@ -13,6 +13,7 @@ data class User(
     val photoUrl: String? = null,
     val matchingCode: String = "",
     val connectedUserId: String? = null,
+    val connected: Boolean = false, // Whether user has an active connection
     val totalPointsReceived: Int = 0,
     val fcmToken: String? = null,
     val createdAt: Timestamp = Timestamp.now()
@@ -50,12 +51,5 @@ data class User(
             ValidationResult.Error(errors)
         }
     }
-    
-    /**
-     * Checks if the user has a connected partner
-     */
-    fun isConnected(): Boolean = !connectedUserId.isNullOrBlank()
-    
-
 }
 

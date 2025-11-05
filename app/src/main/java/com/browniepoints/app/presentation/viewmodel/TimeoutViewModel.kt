@@ -156,6 +156,12 @@ class TimeoutViewModel @Inject constructor(
      * Shows the timeout request confirmation dialog
      */
     fun showTimeoutRequestDialog() {
+        Log.d(TAG, "showTimeoutRequestDialog called")
+        Log.d(TAG, "  - currentConnectionId: ${_currentConnectionId.value}")
+        Log.d(TAG, "  - canRequestTimeout: ${_canRequestTimeout.value}")
+        Log.d(TAG, "  - isTimeoutActive: ${isTimeoutActive.value}")
+        Log.d(TAG, "  - activeTimeout: ${activeTimeout.value}")
+        
         // Validate before showing dialog
         if (!_canRequestTimeout.value) {
             Log.w(TAG, "Cannot show timeout dialog: daily limit exceeded")
@@ -169,6 +175,14 @@ class TimeoutViewModel @Inject constructor(
             Log.w(TAG, "Cannot show timeout dialog: timeout already active")
             _timeoutRequestState.value = UiState.Error(
                 AppError.ValidationError("A timeout is already active.")
+            )
+            return
+        }
+        
+        if (_currentConnectionId.value == null) {
+            Log.w(TAG, "Cannot show timeout dialog: no connection ID set")
+            _timeoutRequestState.value = UiState.Error(
+                AppError.ValidationError("No active connection found. Please connect with someone first.")
             )
             return
         }

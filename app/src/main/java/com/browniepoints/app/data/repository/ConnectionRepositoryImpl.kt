@@ -78,13 +78,19 @@ class ConnectionRepositoryImpl @Inject constructor(
                 // Set connection document
                 transaction.set(connectionRef, connection)
                 
-                // Update both users' connectedUserId field
+                // Update both users' connectedUserId and connected fields
                 val user1Ref = firestore.collection(USERS_COLLECTION).document(userId1)
                 val user2Ref = firestore.collection(USERS_COLLECTION).document(userId2)
                 
                 android.util.Log.d("ConnectionRepository", "Updating user documents with connection info")
-                transaction.update(user1Ref, "connectedUserId", userId2)
-                transaction.update(user2Ref, "connectedUserId", userId1)
+                transaction.update(user1Ref, mapOf(
+                    "connectedUserId" to userId2,
+                    "connected" to true
+                ))
+                transaction.update(user2Ref, mapOf(
+                    "connectedUserId" to userId1,
+                    "connected" to true
+                ))
                 
                 connection
             }.await()
@@ -101,31 +107,31 @@ class ConnectionRepositoryImpl @Inject constructor(
         return try {
             android.util.Log.d("ConnectionRepository", "Getting connection for user: $userId")
             
-            // Use array-contains-any to query both user1Id and user2Id in a single query
-            // Since Firestore doesn't support OR queries directly, we'll use two separate queries
-            // but handle them more efficiently
-            
             // First check if user is user1
             val querySnapshot1 = firestore.collection(CONNECTIONS_COLLECTION)
                 .whereEqualTo("user1Id", userId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .limit(1)
                 .get()
                 .await()
             
+            android.util.Log.d("ConnectionRepository", "Query for user1Id=$userId, active=true returned ${querySnapshot1.size()} documents")
+            
             if (!querySnapshot1.isEmpty) {
                 val connection = querySnapshot1.documents.first().toObject(Connection::class.java)
-                android.util.Log.d("ConnectionRepository", "Found connection as user1: ${connection?.id}")
+                android.util.Log.d("ConnectionRepository", "Found connection as user1: ${connection?.id}, active=${connection?.isActive}")
                 return Result.success(connection)
             }
             
             // Then check if user is user2
             val querySnapshot2 = firestore.collection(CONNECTIONS_COLLECTION)
                 .whereEqualTo("user2Id", userId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .limit(1)
                 .get()
                 .await()
+            
+            android.util.Log.d("ConnectionRepository", "Query for user2Id=$userId, active=true returned ${querySnapshot2.size()} documents")
             
             val connection = if (!querySnapshot2.isEmpty) {
                 querySnapshot2.documents.first().toObject(Connection::class.java)
@@ -133,7 +139,7 @@ class ConnectionRepositoryImpl @Inject constructor(
                 null
             }
             
-            android.util.Log.d("ConnectionRepository", "Found connection as user2: ${connection?.id}")
+            android.util.Log.d("ConnectionRepository", "Found connection as user2: ${connection?.id}, active=${connection?.isActive}")
             Result.success(connection)
         } catch (e: Exception) {
             android.util.Log.e("ConnectionRepository", "Error getting connection for user: $userId", e)
@@ -152,7 +158,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             // Listen for connections where user is user1
             listenerRegistration1 = firestore.collection(CONNECTIONS_COLLECTION)
                 .whereEqualTo("user1Id", userId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         android.util.Log.e("ConnectionRepository", "Error in user1 listener", error)
@@ -185,7 +191,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             // Listen for connections where user is user2
             listenerRegistration2 = firestore.collection(CONNECTIONS_COLLECTION)
                 .whereEqualTo("user2Id", userId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         android.util.Log.e("ConnectionRepository", "Error in user2 listener", error)
@@ -303,14 +309,20 @@ class ConnectionRepositoryImpl @Inject constructor(
             firestore.runTransaction { transaction ->
                 // Deactivate the connection
                 val connectionRef = firestore.collection(CONNECTIONS_COLLECTION).document(connectionId)
-                transaction.update(connectionRef, "isActive", false)
+                transaction.update(connectionRef, "active", false)
                 
-                // Clear both users' connectedUserId field
+                // Clear both users' connectedUserId and connected fields
                 val user1Ref = firestore.collection(USERS_COLLECTION).document(connection.user1Id)
                 val user2Ref = firestore.collection(USERS_COLLECTION).document(connection.user2Id)
                 
-                transaction.update(user1Ref, "connectedUserId", null)
-                transaction.update(user2Ref, "connectedUserId", null)
+                transaction.update(user1Ref, mapOf(
+                    "connectedUserId" to null,
+                    "connected" to false
+                ))
+                transaction.update(user2Ref, mapOf(
+                    "connectedUserId" to null,
+                    "connected" to false
+                ))
             }.await()
             
             android.util.Log.d("ConnectionRepository", "Users disconnected successfully")

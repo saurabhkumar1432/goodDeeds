@@ -86,7 +86,7 @@ class TimeoutRepositoryImpl @Inject constructor(
             if (canRequest) {
                 val userActiveTimeouts = firestore.collection(TIMEOUTS_COLLECTION)
                     .whereEqualTo("userId", userId)
-                    .whereEqualTo("isActive", true)
+                    .whereEqualTo("active", true)
                     .get()
                     .await()
                 
@@ -114,7 +114,7 @@ class TimeoutRepositoryImpl @Inject constructor(
             
             val snapshot = firestore.collection(TIMEOUTS_COLLECTION)
                 .whereEqualTo("connectionId", connectionId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .orderBy("startTime", Query.Direction.DESCENDING)
                 .limit(1)
                 .get()
@@ -129,7 +129,7 @@ class TimeoutRepositoryImpl @Inject constructor(
                 firestore.collection(TIMEOUTS_COLLECTION)
                     .document(timeout.id)
                     .update(mapOf(
-                        "isActive" to false,
+                        "active" to false,
                         "expiredAt" to com.google.firebase.Timestamp.now()
                     ))
                     .await()
@@ -150,12 +150,19 @@ class TimeoutRepositoryImpl @Inject constructor(
         try {
             listener = firestore.collection(TIMEOUTS_COLLECTION)
                 .whereEqualTo("connectionId", connectionId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .orderBy("startTime", Query.Direction.DESCENDING)
                 .limit(1)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.e(TAG, "Error observing active timeout", error)
+                        // Check if it's an index building error
+                        if (error.message?.contains("index is currently building") == true ||
+                            error.message?.contains("requires an index") == true) {
+                            Log.w(TAG, "Index is still building, will retry automatically")
+                            trySend(null) // Send null instead of crashing
+                            return@addSnapshotListener
+                        }
                         close(error)
                         return@addSnapshotListener
                     }
@@ -169,7 +176,7 @@ class TimeoutRepositoryImpl @Inject constructor(
                         firestore.collection(TIMEOUTS_COLLECTION)
                             .document(timeout.id)
                             .update(mapOf(
-                                "isActive" to false,
+                                "active" to false,
                                 "expiredAt" to com.google.firebase.Timestamp.now(),
                                 "autoExpired" to true
                             ))
@@ -196,7 +203,7 @@ class TimeoutRepositoryImpl @Inject constructor(
             firestore.collection(TIMEOUTS_COLLECTION)
                 .document(timeoutId)
                 .update(mapOf(
-                    "isActive" to false,
+                    "active" to false,
                     "expiredAt" to com.google.firebase.Timestamp.now(),
                     "manuallyExpired" to true
                 ))
@@ -258,10 +265,17 @@ class TimeoutRepositoryImpl @Inject constructor(
         try {
             listener = firestore.collection(TIMEOUTS_COLLECTION)
                 .whereEqualTo("connectionId", connectionId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.e(TAG, "Error observing timeout status", error)
+                        // Check if it's an index building error
+                        if (error.message?.contains("index is currently building") == true ||
+                            error.message?.contains("requires an index") == true) {
+                            Log.w(TAG, "Index is still building for timeout status, will retry automatically")
+                            trySend(false) // Send false instead of crashing
+                            return@addSnapshotListener
+                        }
                         close(error)
                         return@addSnapshotListener
                     }
@@ -273,7 +287,7 @@ class TimeoutRepositoryImpl @Inject constructor(
                             firestore.collection(TIMEOUTS_COLLECTION)
                                 .document(timeout.id)
                                 .update(mapOf(
-                                    "isActive" to false,
+                                    "active" to false,
                                     "expiredAt" to com.google.firebase.Timestamp.now(),
                                     "autoExpired" to true
                                 ))
@@ -301,7 +315,7 @@ class TimeoutRepositoryImpl @Inject constructor(
             Log.d(TAG, "Cleaning up expired timeouts")
             
             val snapshot = firestore.collection(TIMEOUTS_COLLECTION)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .get()
                 .await()
             
@@ -313,7 +327,7 @@ class TimeoutRepositoryImpl @Inject constructor(
                 if (timeout != null && timeout.hasExpired()) {
                     // Update with cleanup metadata
                     batch.update(doc.reference, mapOf(
-                        "isActive" to false,
+                        "active" to false,
                         "expiredAt" to com.google.firebase.Timestamp.now(),
                         "cleanupExpired" to true
                     ))
@@ -354,7 +368,7 @@ class TimeoutRepositoryImpl @Inject constructor(
             // Get all active timeouts for this connection
             val snapshot = firestore.collection(TIMEOUTS_COLLECTION)
                 .whereEqualTo("connectionId", connectionId)
-                .whereEqualTo("isActive", true)
+                .whereEqualTo("active", true)
                 .get()
                 .await()
             
@@ -366,7 +380,7 @@ class TimeoutRepositoryImpl @Inject constructor(
                 val timeout = doc.toObject(Timeout::class.java)
                 if (timeout != null && timeout.hasExpired()) {
                     batch.update(doc.reference, mapOf(
-                        "isActive" to false,
+                        "active" to false,
                         "expiredAt" to com.google.firebase.Timestamp.now(),
                         "syncExpired" to true
                     ))

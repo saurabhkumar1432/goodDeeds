@@ -100,6 +100,10 @@ class AuthRepositoryImpl @Inject constructor(
                 email = firebaseUser.email ?: "",
                 photoUrl = firebaseUser.photoUrl?.toString(),
                 matchingCode = generateMatchingCode(),
+                connectedUserId = null,
+                connected = false,
+                totalPointsReceived = 0,
+                fcmToken = null,
                 createdAt = Timestamp.now()
             )
             

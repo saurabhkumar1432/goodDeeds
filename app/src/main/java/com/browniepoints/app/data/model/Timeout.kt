@@ -4,6 +4,7 @@ import com.browniepoints.app.data.validation.ValidationResult
 import com.browniepoints.app.data.validation.ValidationUtils
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -14,6 +15,7 @@ data class Timeout(
     val connectionId: String = "",
     val startTime: Timestamp = Timestamp.now(),
     val duration: Long = DEFAULT_DURATION_MS, // 30 minutes in milliseconds
+    @PropertyName("active")
     val isActive: Boolean = true,
     val createdDate: String = getCurrentDateString() // YYYY-MM-DD format for daily tracking
 ) {
