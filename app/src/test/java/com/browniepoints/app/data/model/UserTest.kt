@@ -190,11 +190,12 @@ class UserTest {
         // Given
         val connectedUser = User(
             uid = "test_user_id",
-            connectedUserId = "partner_id"
+            connectedUserId = "partner_id",
+            connected = true
         )
 
         // When
-        val result = connectedUser.isConnected()
+        val result = connectedUser.connected && !connectedUser.connectedUserId.isNullOrBlank()
 
         // Then
         assertTrue(result)
@@ -205,11 +206,12 @@ class UserTest {
         // Given
         val unconnectedUser = User(
             uid = "test_user_id",
-            connectedUserId = null
+            connectedUserId = null,
+            connected = false
         )
 
         // When
-        val result = unconnectedUser.isConnected()
+        val result = unconnectedUser.connected && !unconnectedUser.connectedUserId.isNullOrBlank()
 
         // Then
         assertFalse(result)
@@ -220,11 +222,12 @@ class UserTest {
         // Given
         val unconnectedUser = User(
             uid = "test_user_id",
-            connectedUserId = ""
+            connectedUserId = "",
+            connected = false
         )
 
         // When
-        val result = unconnectedUser.isConnected()
+        val result = unconnectedUser.connected && !unconnectedUser.connectedUserId.isNullOrBlank()
 
         // Then
         assertFalse(result)

@@ -12,12 +12,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Logout
@@ -37,9 +40,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,12 +55,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.browniepoints.app.data.model.User
+import com.browniepoints.app.presentation.ui.components.AnimatedPointsCounter
+import com.browniepoints.app.presentation.ui.components.CelebrationAnimation
 import com.browniepoints.app.presentation.ui.components.CompactTimeoutStatus
+import com.browniepoints.app.presentation.ui.components.EmptyState
+import com.browniepoints.app.presentation.ui.components.InfoCard
 import com.browniepoints.app.presentation.ui.components.RequestTimeoutButton
 import com.browniepoints.app.presentation.ui.components.TimeoutCountdown
 import com.browniepoints.app.presentation.ui.components.TimeoutDisabledOverlay
 import com.browniepoints.app.presentation.ui.components.TimeoutRequestDialog
-import com.browniepoints.app.presentation.ui.theme.BrowniePointsAppTheme
+import com.browniepoints.app.presentation.ui.theme.*
 import com.browniepoints.app.presentation.viewmodel.AuthViewModel
 import com.browniepoints.app.presentation.viewmodel.ConnectionViewModel
 import com.browniepoints.app.presentation.viewmodel.TimeoutViewModel
@@ -245,84 +257,171 @@ private fun PointBalanceCard(
 ) {
     val pointsBalance = currentUser?.totalPointsReceived ?: 0
     val isNegative = pointsBalance < 0
+    var showCelebration by remember { mutableStateOf(false) }
+    val bounceScale = rememberBounceAnimation(pointsBalance > 0)
     
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isNegative) {
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+    // Show celebration when points increase
+    LaunchedEffect(pointsBalance) {
+        if (pointsBalance > 0) {
+            showCelebration = true
+        }
+    }
+    
+    Box(modifier = modifier) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = ResponsiveCard.elevation()),
+            shape = RoundedCornerShape(ResponsiveCard.cornerRadius()),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    isNegative -> ErrorRed.copy(alpha = 0.1f)
+                    pointsBalance > 0 -> BrownieGoldLight.copy(alpha = 0.1f)
+                    else -> MaterialTheme.colorScheme.surface
+                }
+            )
         ) {
-            Text(
-                text = "Your Balance",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = "$pointsBalance",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    isNegative -> MaterialTheme.colorScheme.error
-                    pointsBalance == 0 -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.primary
-                }
-            )
-            
-            Text(
-                text = when {
-                    isNegative -> "brownie points in debt"
-                    pointsBalance == 0 -> "no brownie points yet"
-                    pointsBalance == 1 -> "brownie point earned"
-                    else -> "brownie points earned"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            
-            // Show balance status indicator
-            if (isNegative) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = when {
+                            pointsBalance > 0 -> GoldGradient
+                            else -> Brush.horizontalGradient(
+                                colors = listOf(Color.Transparent, Color.Transparent)
+                            )
+                        },
+                        alpha = 0.1f
+                    )
+                    .padding(ResponsiveCard.padding())
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "Negative Balance",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(16.dp)
+                    // Cute couple-focused header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (pointsBalance > 0) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            tint = if (pointsBalance > 0) BrownieGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(ResponsiveIcon.small())
+                                .scale(bounceScale)
+                        )
+                        Spacer(modifier = Modifier.width(ResponsiveSpacing.small()))
+                        Text(
+                            text = when {
+                                isNegative -> "Oops! You're in debt 💔"
+                                pointsBalance == 0 -> "Your Love Score ❤️"
+                                else -> "Your Love Score 💝"
+                            },
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = ResponsiveText.title()
+                            ),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(ResponsiveSpacing.small()))
+                    
+                    // Animated points counter
+                    AnimatedPointsCounter(
+                        points = pointsBalance,
+                        modifier = Modifier.scale(bounceScale)
                     )
+                    
                     Text(
-                        text = "Time to earn some points back!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        text = when {
+                            isNegative -> "brownie points to earn back 😅"
+                            pointsBalance == 0 -> "Start earning brownie points! 🎯"
+                            pointsBalance == 1 -> "brownie point from your partner 🌟"
+                            else -> "brownie points from your partner 🎉"
+                        },
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = ResponsiveText.body()
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = ResponsiveSpacing.medium())
                     )
+                    
+                    // Motivational message
+                    if (isNegative) {
+                        Spacer(modifier = Modifier.height(ResponsiveSpacing.small()))
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = ErrorRedLight.copy(alpha = 0.2f)
+                            ),
+                            shape = RoundedCornerShape(ResponsiveCard.cornerRadius() / 2)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(
+                                    horizontal = ResponsiveSpacing.medium(),
+                                    vertical = ResponsiveSpacing.small()
+                                )
+                            ) {
+                                Text(
+                                    text = "Time to be extra sweet! 💕",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = ResponsiveText.small()
+                                    ),
+                                    color = ErrorRed,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    } else if (pointsBalance >= 10) {
+                        Spacer(modifier = Modifier.height(ResponsiveSpacing.small()))
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = SuccessGreenLight.copy(alpha = 0.2f)
+                            ),
+                            shape = RoundedCornerShape(ResponsiveCard.cornerRadius() / 2)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(
+                                    horizontal = ResponsiveSpacing.medium(),
+                                    vertical = ResponsiveSpacing.small()
+                                )
+                            ) {
+                                Text(
+                                    text = "You're doing amazing! 🌈✨",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = ResponsiveText.small()
+                                    ),
+                                    color = SuccessGreen,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Compact timeout status
+                    if (isTimeoutActive) {
+                        Spacer(modifier = Modifier.height(ResponsiveSpacing.medium()))
+                        CompactTimeoutStatus(
+                            isActive = isTimeoutActive,
+                            remainingTimeMs = remainingTimeMs
+                        )
+                    }
                 }
             }
-            
-            // Compact timeout status
-            if (isTimeoutActive) {
-                Spacer(modifier = Modifier.height(8.dp))
-                CompactTimeoutStatus(
-                    isActive = isTimeoutActive,
-                    remainingTimeMs = remainingTimeMs
-                )
-            }
+        }
+        
+        // Celebration animation overlay
+        if (showCelebration && pointsBalance > 0) {
+            CelebrationAnimation(
+                visible = true,
+                onComplete = { showCelebration = false }
+            )
         }
     }
 }
@@ -333,128 +432,121 @@ private fun ConnectedPartnerCard(
     onNavigateToConnection: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
+    if (connectedPartner != null) {
+        // Connected - show partner info with love
+        val heartBeat = rememberPulseAnimation()
+        
+        Card(
+            modifier = modifier,
+            elevation = CardDefaults.cardElevation(defaultElevation = ResponsiveCard.elevation()),
+            shape = RoundedCornerShape(ResponsiveCard.cornerRadius()),
+            colors = CardDefaults.cardColors(
+                containerColor = BrownieGoldLight.copy(alpha = 0.05f)
+            )
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = GoldGradient,
+                        alpha = 0.05f
+                    )
+                    .padding(ResponsiveCard.padding())
             ) {
-                Icon(
-                    imageVector = Icons.Default.Link,
-                    contentDescription = "Connection",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                
-                Text(
-                    text = "Connected Partner",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            if (connectedPartner != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Partner avatar placeholder
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(ResponsiveSpacing.medium())
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "Partner Avatar",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = connectedPartner.displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        // Partner avatar with heart beat
+                        Box(
+                            modifier = Modifier
+                                .size(ResponsiveIcon.large())
+                                .clip(CircleShape)
+                                .background(BrownieGoldLight.copy(alpha = heartBeat * 0.3f))
+                                .padding(ResponsiveSpacing.extraSmall()),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
+                            Icon(
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = null,
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            )
-                            
-                            Text(
-                                text = "Connected",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
+                                    .size(ResponsiveIcon.medium())
+                                    .scale(1f + (1f - heartBeat) * 0.1f),
+                                tint = BrownieGold
                             )
                         }
                         
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Connected with 💕",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontSize = ResponsiveText.small()
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(ResponsiveSpacing.extraSmall()))
+                            Text(
+                                text = connectedPartner.displayName,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = ResponsiveText.headline()
+                                ),
+                                fontWeight = FontWeight.Bold,
+                                color = BrownieGold
+                            )
+                        }
                         
-                        Text(
-                            text = "Points: ${connectedPartner.totalPointsReceived}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // View details button
+                        IconButton(onClick = onNavigateToConnection) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = "View Partner",
+                                tint = BrownieGold,
+                                modifier = Modifier.size(ResponsiveIcon.medium())
+                            )
+                        }
                     }
-                }
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "No partner connected",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
                     
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = "Connect with someone to start exchanging brownie points!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    OutlinedButton(
-                        onClick = onNavigateToConnection,
-                        modifier = Modifier.fillMaxWidth()
+                    // Relationship status message
+                    Spacer(modifier = Modifier.height(ResponsiveSpacing.medium()))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = WarmCream.copy(alpha = 0.3f)
+                        ),
+                        shape = RoundedCornerShape(ResponsiveCard.cornerRadius() / 2)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Connect with Someone")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(ResponsiveSpacing.medium()),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "💑 Keep the love alive with brownie points! 💝",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = ResponsiveText.small()
+                                ),
+                                color = ChocolateBrown,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
         }
+    } else {
+        // Not connected - show empty state with invitation
+        EmptyState(
+            icon = Icons.Default.FavoriteBorder,
+            title = "No Partner Yet 💔",
+            message = "Connect with your special someone to start earning and giving brownie points together!",
+            actionText = "Connect Now",
+            onActionClick = onNavigateToConnection,
+            modifier = modifier
+        )
     }
 }
 
