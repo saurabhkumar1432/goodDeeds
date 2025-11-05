@@ -172,23 +172,34 @@ class AuthViewModel @Inject constructor(
             Log.d(TAG, "Starting sign out")
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            googleSignInService.signOut()
-                .onSuccess {
-                    Log.d(TAG, "Sign out successful")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = null,
-                        userProfile = null
-                    )
-                    _navigationEvent.value = NavigationEvent.NavigateToSignIn
-                }
-                .onFailure { exception ->
-                    Log.e(TAG, "Sign out failed", exception)
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message ?: "Sign-out failed"
-                    )
-                }
+            try {
+                googleSignInService.signOut()
+                    .onSuccess {
+                        Log.d(TAG, "Sign out successful")
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = null,
+                            userProfile = null,
+                            currentUser = null,
+                            isSignedIn = false
+                        )
+                        // Navigation will be handled automatically by BrowniePointsNavigation
+                        // observing auth state changes
+                    }
+                    .onFailure { exception ->
+                        Log.e(TAG, "Sign out failed", exception)
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = exception.message ?: "Sign-out failed"
+                        )
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception during sign out", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "Sign-out failed"
+                )
+            }
         }
     }
 
