@@ -2,6 +2,7 @@ package com.browniepoints.app.presentation.ui.screen
 
 import android.app.Activity
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -104,6 +105,11 @@ fun SignInScreen(
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
+    }
+
+    // Handle back button on sign-in screen - prevent app exit, user must sign in
+    BackHandler {
+        // Do nothing - require user to sign in, don't allow back navigation to close app
     }
 
     // Google Play Services dialog

@@ -87,7 +87,15 @@ class UserRepositoryImpl @Inject constructor(
                 .document(userId)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-                        close(error.toAppError())
+                        // Handle permission errors gracefully (e.g., after logout)
+                        if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            // User is no longer authenticated, close the flow gracefully
+                            trySend(null)
+                            close()
+                        } else {
+                            // Other errors should be propagated
+                            close(error.toAppError())
+                        }
                         return@addSnapshotListener
                     }
                     
@@ -99,7 +107,14 @@ class UserRepositoryImpl @Inject constructor(
                     trySend(user)
                 }
         } catch (e: Exception) {
-            close(e.toAppError())
+            // Handle exceptions gracefully
+            if (e is com.google.firebase.firestore.FirebaseFirestoreException && 
+                e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                trySend(null)
+                close()
+            } else {
+                close(e.toAppError())
+            }
         }
         
         awaitClose {

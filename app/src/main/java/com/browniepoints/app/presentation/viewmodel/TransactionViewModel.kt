@@ -503,6 +503,15 @@ class TransactionViewModel @Inject constructor(
             }
         }
     }
+    
+    /**
+     * Clears all data when user logs out
+     */
+    fun clearData() {
+        _uiState.value = TransactionUiState()
+        _givePointsState.value = GivePointsState()
+        _deductPointsState.value = DeductPointsState()
+    }
 }
 
 /**

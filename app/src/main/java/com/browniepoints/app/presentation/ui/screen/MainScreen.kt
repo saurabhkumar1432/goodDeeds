@@ -95,6 +95,9 @@ fun MainScreen(
             connectionViewModel.loadConnection(userId)
             // Start observing real-time point balance updates
             transactionViewModel.observeUserPointBalance(userId)
+        } ?: run {
+            // User signed out, clear data
+            transactionViewModel.clearData()
         }
     }
     
@@ -158,14 +161,16 @@ fun MainScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             
-            // Timeout history summary (only show if connected)
-            if (givePointsState.connectedPartner != null) {
-                TimeoutHistorySummary(
-                    userId = authState.currentUser?.uid ?: "",
-                    onNavigateToTimeoutHistory = onNavigateToTimeoutHistory,
-                    timeoutViewModel = timeoutViewModel,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            // Timeout history summary (only show if connected and user is authenticated)
+            authState.currentUser?.uid?.let { userId ->
+                if (givePointsState.connectedPartner != null) {
+                    TimeoutHistorySummary(
+                        userId = userId,
+                        onNavigateToTimeoutHistory = onNavigateToTimeoutHistory,
+                        timeoutViewModel = timeoutViewModel,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
             
             // Timeout countdown (when active)

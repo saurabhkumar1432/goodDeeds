@@ -56,10 +56,12 @@ fun BrowniePointsNavigation(
             
             if (currentRoute != BrowniePointsDestinations.SIGN_IN) {
                 android.util.Log.d("Navigation", "Navigating to sign-in screen")
+                // Clear entire back stack and navigate to sign in
                 navController.navigate(BrowniePointsDestinations.SIGN_IN) {
-                    popUpTo(0) {
+                    popUpTo(navController.graph.id) {
                         inclusive = true
                     }
+                    launchSingleTop = true
                 }
             }
         }

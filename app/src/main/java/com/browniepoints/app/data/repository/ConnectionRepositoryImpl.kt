@@ -156,6 +156,14 @@ class ConnectionRepositoryImpl @Inject constructor(
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         android.util.Log.e("ConnectionRepository", "Error in user1 listener", error)
+                        // Handle PERMISSION_DENIED (e.g., after logout) gracefully
+                        if (error is com.google.firebase.firestore.FirebaseFirestoreException &&
+                            error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            android.util.Log.d("ConnectionRepository", "Permission denied, closing connection listener")
+                            trySend(null)
+                            close()
+                            return@addSnapshotListener
+                        }
                         close(error)
                         return@addSnapshotListener
                     }
@@ -181,6 +189,14 @@ class ConnectionRepositoryImpl @Inject constructor(
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         android.util.Log.e("ConnectionRepository", "Error in user2 listener", error)
+                        // Handle PERMISSION_DENIED (e.g., after logout) gracefully
+                        if (error is com.google.firebase.firestore.FirebaseFirestoreException &&
+                            error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            android.util.Log.d("ConnectionRepository", "Permission denied, closing connection listener")
+                            trySend(null)
+                            close()
+                            return@addSnapshotListener
+                        }
                         close(error)
                         return@addSnapshotListener
                     }
